@@ -52,7 +52,7 @@ def test_submission_schema_and_ranges():
 
 def test_market_consensus_is_margin_free():
     fixture = pd.Series({"date": pd.Timestamp("2026-07-19"), "home_team": "Spain", "away_team": "Argentina"})
-    result = market_consensus(Path(__file__).parents[2] / "final-market-odds.csv", fixture)
+    result = market_consensus(Path(__file__).parents[1] / "final-market-odds.csv", fixture)
     assert result is not None
     assert np.isclose(result.sum(), 1)
     assert result[0] > result[2]

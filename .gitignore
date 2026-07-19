@@ -2,19 +2,17 @@ API_Key_TabPFN
 __pycache__/
 *.pyc
 .DS_Store
+.venv/
+.pytest_cache/
+.remember/
 
 # Dataset — fetched automatically from public URL on first run
-tabpfn-football-predictions/results.csv
+results.csv
 
 # Large derived artifacts — reproducible via --evaluate
-tabpfn-football-predictions/artifacts/oof_predictions.csv
-tabpfn-football-predictions/artifacts/competition_predictions.csv
-tabpfn-football-predictions/artifacts/fold_metrics.csv
+artifacts/oof_predictions.csv
+artifacts/competition_predictions.csv
+artifacts/fold_metrics.csv
 
-# Python environment
-tabpfn-football-predictions/.venv/
-tabpfn-football-predictions/.pytest_cache/
-
-# Rejected prediction variants
-tabpfn-football-predictions/predictions_*.csv
-
+# Rejected prediction variants from exploration
+predictions_*.csv

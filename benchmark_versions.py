@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--months", nargs="+", default=["2026-03", "2026-05", "2026-06"])
     parser.add_argument("--output", default="artifacts/version_benchmark.csv")
     args = parser.parse_args()
-    load_api_token(Path(__file__).resolve().parent.parent / "API_Key_TabPFN")
+    load_api_token(Path(__file__).resolve().parent / "API_Key_TabPFN")
     frame = build_features(load_data())
     rows = []
     for month_text in args.months:

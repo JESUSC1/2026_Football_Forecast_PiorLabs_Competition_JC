@@ -15,7 +15,7 @@ MAX_TRAIN = 10000
 HOME_ADV = 65.0
 DATA = "results.csv"
 RAW_URL = "https://raw.githubusercontent.com/martj42/international_results/master/results.csv"
-GROUND_TRUTH = "../previous-matches-ground-truth.csv"
+GROUND_TRUTH = "previous-matches-ground-truth.csv"
 REPORTS_DIR = "reports"
 
 FEATURES = [

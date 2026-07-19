@@ -20,7 +20,7 @@ MAX_TRAIN = 10_000
 DEFAULT_WEIGHTS = {"tabpfn": 0.50, "lightgbm": 0.30, "poisson": 0.20}
 DEFAULT_TEMPERATURE = 1.0
 DEFAULT_MARKET_WEIGHT = 0.85
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent
 
 
 def parse_args():
