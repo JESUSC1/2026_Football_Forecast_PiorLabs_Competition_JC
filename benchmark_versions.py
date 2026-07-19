@@ -9,6 +9,8 @@ import pandas as pd
 from features import BASE_FEATURES, ENHANCED_FEATURES, build_features, load_data
 from models import fit_tabpfn, load_api_token, multiclass_log_loss, predict_tabpfn
 
+FEATURE_REVISION = "historical_world_cup_editions_v2"
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -29,12 +31,19 @@ def main():
             for feature_name, columns in (("baseline", BASE_FEATURES), ("enhanced", ENHANCED_FEATURES)):
                 model = fit_tabpfn(train[columns], train.outcome.to_numpy(), version, "off")
                 loss = multiclass_log_loss(test.outcome, predict_tabpfn(model, test[columns]))
-                item = {"month": month_text, "model_version": version, "features": feature_name, "matches": len(test), "log_loss": loss}
+                item = {"feature_revision": FEATURE_REVISION, "month": month_text, "model_version": version, "features": feature_name, "matches": len(test), "log_loss": loss}
                 rows.append(item)
                 print(item)
+                # Preserve progress separately if an API quota/network failure
+                # interrupts the benchmark. Only a complete run replaces the
+                # authoritative output below.
+                partial = Path(args.output).with_suffix(".partial.csv")
+                partial.parent.mkdir(parents=True, exist_ok=True)
+                pd.DataFrame(rows).to_csv(partial, index=False)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_csv(output, index=False)
+    output.with_suffix(".partial.csv").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

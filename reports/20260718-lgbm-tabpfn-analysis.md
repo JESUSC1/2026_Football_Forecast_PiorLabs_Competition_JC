@@ -1,4 +1,11 @@
 # WC 2026 Final — Full Analysis & Submission Guide
+
+> **Historical report — superseded.** Metrics, weights, paths, and the Final row
+> in this document predate the pinned-data and historical-tournament compliance
+> corrections. Use `20260718-enhanced-tabpfn-ensemble.md`,
+> `20260718-submission-compliance-implementation.md`, and
+> `enhanced-final-predictions.csv` as the authoritative artifacts.
+
 **Session:** 2026-07-18  
 **Competition:** Prior Labs World Cup 2026 Prediction  
 **Match:** Spain vs Argentina, 2026-07-19 (neutral venue)  

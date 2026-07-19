@@ -1,0 +1,9 @@
+{
+  "dataset": "martj42/international_results results.csv",
+  "git_commit": "80f408d2c93ba4f9e06a2c7cdc5effb05fea9680",
+  "raw_url": "https://raw.githubusercontent.com/martj42/international_results/80f408d2c93ba4f9e06a2c7cdc5effb05fea9680/results.csv",
+  "normalized_rows": 49520,
+  "normalized_sha256": "7f2a1026c1e78d825b58deba2555d81331b0a80752c57e8e0a3332d1350e5d4c",
+  "last_fixture_date": "2026-07-19",
+  "purpose": "Pinned pre-kickoff input used for the 2026-07-19 Final forecast"
+}

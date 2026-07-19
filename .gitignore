@@ -13,6 +13,7 @@ results.csv
 artifacts/oof_predictions.csv
 artifacts/competition_predictions.csv
 artifacts/fold_metrics.csv
+artifacts/version_benchmark.partial.csv
 
 # Rejected prediction variants from exploration
 predictions_*.csv

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import os
+import hashlib
 from collections import defaultdict
 from pathlib import Path
 
@@ -10,11 +11,12 @@ import numpy as np
 import pandas as pd
 
 DATA = "results.csv"
-RAW_URL = "https://raw.githubusercontent.com/martj42/international_results/master/results.csv"
+DATA_COMMIT = "80f408d2c93ba4f9e06a2c7cdc5effb05fea9680"
+RAW_URL = f"https://raw.githubusercontent.com/martj42/international_results/{DATA_COMMIT}/results.csv"
+DATA_SHA256 = "7f2a1026c1e78d825b58deba2555d81331b0a80752c57e8e0a3332d1350e5d4c"
 REGULATION_OVERRIDES = "regulation-time-overrides.csv"
 HOME_ADVANTAGE = 65.0
 TRAIN_START = pd.Timestamp("2014-01-01")
-WORLD_CUP_2026_START = pd.Timestamp("2026-06-11")
 
 BASE_FEATURES = [
     "elo_diff", "home_elo", "away_elo", "form5_diff", "form10_diff",
@@ -59,6 +61,12 @@ def load_data(refresh: bool = False, path: str = DATA) -> pd.DataFrame:
         frame.to_csv(path, index=False)
     else:
         frame = pd.read_csv(path)
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    if digest != DATA_SHA256:
+        raise ValueError(
+            f"Dataset checksum mismatch for {path}: expected {DATA_SHA256}, got {digest}. "
+            "Use --refresh to restore the pinned pre-kickoff snapshot."
+        )
     frame["date"] = pd.to_datetime(frame["date"])
     frame = frame.sort_values(["date"], kind="stable").reset_index(drop=True)
     frame["neutral"] = frame["neutral"].astype(str).str.upper().eq("TRUE").astype(int)
@@ -113,7 +121,12 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     records = defaultdict(list)  # points, gf, ga, won, drawn, opponent elo
     last_date: dict[str, pd.Timestamp] = {}
     h2h = defaultdict(list)
+    # State is separated by World Cup edition. A gap of more than one year starts
+    # a new edition, allowing historical tournament rows to train the features.
     world_cup = defaultdict(list)
+    world_cup_match_count = defaultdict(int)
+    world_cup_edition = 0
+    last_world_cup_date = None
     rows: list[dict[str, float]] = []
 
     def team(team: str):
@@ -135,15 +148,16 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             "sos": _mean(rec, 5, 10, 1500.0), "streak": streak, "played": len(rec),
         }
 
-    def wc(team_name: str):
-        rec = world_cup[team_name]
+    def wc(team_name: str, edition: int):
+        rec = world_cup[(edition, team_name)]
+        knockout = [row for row in rec if row[4]]
         return {
             "games": len(rec), "points": _mean(rec, 0, 20, 1.3),
             "gf": _mean(rec, 1, 20, 1.2), "ga": _mean(rec, 2, 20, 1.2),
-            "clean": _mean(rec, 3, 20, 0.3), "ko": _mean(rec, 0, 5, 1.3),
+            "clean": _mean(rec, 3, 20, 0.3), "ko": _mean(knockout, 0, 5, 1.3),
         }
 
-    def apply_result(match, h, a, advantage):
+    def apply_result(match, h, a, advantage, edition, is_knockout):
         if pd.isna(match.home_score) or pd.isna(match.away_score):
             return
         home, away = match.home_team, match.away_team
@@ -162,9 +176,10 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         last_date[home] = last_date[away] = match.date
         winner = home if gd > 0 else away if gd < 0 else "draw"
         h2h[tuple(sorted((home, away)))].append((home, gd, winner))
-        if match.tournament == "FIFA World Cup" and match.date >= WORLD_CUP_2026_START:
-            world_cup[home].append((hp, match.home_score, match.away_score, float(match.away_score == 0)))
-            world_cup[away].append((ap, match.away_score, match.home_score, float(match.home_score == 0)))
+        if match.tournament == "FIFA World Cup":
+            world_cup[(edition, home)].append((hp, match.home_score, match.away_score, float(match.away_score == 0), is_knockout))
+            world_cup[(edition, away)].append((ap, match.away_score, match.home_score, float(match.home_score == 0), is_knockout))
+            world_cup_match_count[edition] += 1
 
     pending = []
     current_date = None
@@ -176,9 +191,22 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
                 apply_result(*prior)
             pending = []
             current_date = match.date
+        if match.tournament == "FIFA World Cup":
+            if last_world_cup_date is not None and (match.date - last_world_cup_date).days > 365:
+                world_cup_edition += 1
+            last_world_cup_date = match.date
         home, away = match.home_team, match.away_team
         h, a = team(home), team(away)
-        hw, aw = wc(home), wc(away)
+        is_world_cup = match.tournament == "FIFA World Cup"
+        if is_world_cup:
+            hw, aw = wc(home, world_cup_edition), wc(away, world_cup_edition)
+        else:
+            hw = aw = {"games": 0, "points": 1.3, "gf": 1.2, "ga": 1.2, "clean": 0.3, "ko": 1.3}
+        # Since 1998, 32-team editions had 48 group matches. The expanded 2026
+        # edition has 72. This is deterministic from the edition year and avoids
+        # claiming that arbitrary recent tournament matches are knockout games.
+        group_matches = 72 if match.date.year >= 2026 else 48
+        is_knockout = bool(is_world_cup and world_cup_match_count[world_cup_edition] >= group_matches)
         advantage = HOME_ADVANTAGE * (1 - match.neutral)
         pair = h2h[tuple(sorted((home, away)))]
         if pair:
@@ -219,7 +247,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             "poisson_p_home_win": ph, "poisson_p_draw": pd_, "poisson_p_away_win": pa,
         }
         rows.append(row)
-        pending.append((match, h, a, advantage))
+        pending.append((match, h, a, advantage, world_cup_edition, is_knockout))
 
     for prior in pending:
         apply_result(*prior)

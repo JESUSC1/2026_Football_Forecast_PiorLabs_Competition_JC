@@ -12,11 +12,11 @@ leakage-safe modeling pipeline with 53 engineered features, rolling-origin
 evaluation, LightGBM and Poisson ensemble members, probability calibration,
 and a saved market-consensus input.
 
-Canonical submission (`../final-predictions.csv`):
+Canonical submission (`enhanced-final-predictions.csv`):
 
 ```csv
 date,home_team,away_team,p_home_win,p_draw,p_away_win
-2026-07-19,Spain,Argentina,0.41772418342418227,0.3114810330968958,0.270794783478922
+2026-07-19,Spain,Argentina,0.42009285153303505,0.31109835875415126,0.26880878971281374
 ```
 
 The row was validated to use the exact six-column schema, contain probabilities
@@ -63,8 +63,8 @@ strictly between zero and one, and sum to exactly one within machine precision.
 - Ensemble weights were optimized on pooled out-of-fold log-loss with
   nonnegative weights constrained to sum to one.
 - Temperature scaling was accepted only because it improved rolling OOF loss.
-- Learned weights: TabPFN 0.8870966, LightGBM 0.0643383, Poisson 0.0485651.
-- Learned temperature: 1.0372414.
+- Learned weights: TabPFN 0.8489460, LightGBM 0.1077292, Poisson 0.0433247.
+- Learned temperature: 1.0374974.
 
 ### Final market component
 
@@ -72,7 +72,7 @@ strictly between zero and one, and sum to exactly one within machine precision.
 - Each source was converted to margin-free probabilities and the component-wise
   median was normalized.
 - The Final uses 85% saved market consensus and 15% calibrated model ensemble.
-- Inputs, retrieval time, and URLs are stored in `../final-market-odds.csv`.
+- Inputs, retrieval time, and URLs are stored in `final-market-odds.csv`.
 
 ## Features added
 
@@ -105,13 +105,13 @@ Final clean metrics after correcting regulation-time labels and same-day leakage
 
 | Model | Rolling OOF log-loss | 36-match competition log-loss |
 |---|---:|---:|
-| Enhanced TabPFN v3 | 0.8581 | 0.8193 |
-| LightGBM | 0.8686 | 0.8235 |
+| Enhanced TabPFN v3 | 0.8582 | 0.8287 |
+| LightGBM | 0.8679 | 0.8336 |
 | Poisson | 0.9775 | 0.9665 |
-| Calibrated broad ensemble | **0.8567** | 0.8266 |
+| Calibrated broad ensemble | **0.8567** | 0.8350 |
 
 The saved OOF CSV is the source of truth for exact recomputation. Exact rolling
-scores are 0.8581371999, 0.8685994778, and 0.9774886018 respectively.
+scores are 0.8581909140, 0.8678510328, and 0.9774886018 respectively.
 
 The broad ensemble was retained because it had the best pooled rolling loss.
 TabPFN alone was strongest on the much smaller competition window. The Final's
@@ -120,7 +120,10 @@ TabPFN alone was strongest on the much smaller competition window. The Final's
 ## Focused TabPFN benchmark
 
 March, May, and June 2026 were used to compare v2.6/v3 and baseline/enhanced
-features. The clean benchmark is stored in `artifacts/version_benchmark.csv`.
+features. These figures predate the historical tournament-state correction and
+are retained as a revision-labelled historical experiment in
+`artifacts/version_benchmark.csv`. A refresh was attempted after the correction,
+but the Prior Labs daily API limit was reached before the matrix completed.
 
 | Month | v2.6 baseline | v2.6 enhanced | v3 baseline | v3 enhanced |
 |---|---:|---:|---:|---:|
@@ -146,7 +149,7 @@ stored in `regulation-time-overrides.csv`:
 | Argentina vs Switzerland | 3-1 | 1-1 | draw |
 
 These corrections are applied in memory; `results.csv` remains the reproducible
-raw source cache. `../previous-matches-ground-truth.csv` contains the corrected
+raw source cache. `previous-matches-ground-truth.csv` contains the corrected
 one-hot labels for all 36 completed matches.
 
 ## Reproduction
@@ -163,11 +166,13 @@ python benchmark_versions.py
 
 # Full rolling evaluation and Final generation
 python predict.py --model-version v3 --evaluate \
-  --output ../enhanced-final-predictions.csv
+  --fixtures competition/final-fixtures.csv --as-of 2026-07-19 \
+  --output enhanced-final-predictions.csv
 
 # Normal Final generation using saved ensemble configuration
 python predict.py --model-version v3 \
-  --output ../final-predictions.csv
+  --fixtures competition/final-fixtures.csv --as-of 2026-07-19 \
+  --output enhanced-final-predictions.csv
 ```
 
 On macOS, LightGBM requires `llvm-openmp` from conda-forge. The root
@@ -189,7 +194,7 @@ used the client's supported cached browser authentication.
 | `artifacts/oof_predictions.csv` | 2,631 aligned OOF predictions |
 | `artifacts/competition_predictions.csv` | 36 daily expanding predictions |
 | `artifacts/ensemble_config.json` | Selected weights and temperature |
-| `artifacts/version_benchmark.csv` | Clean focused benchmark |
+| `artifacts/version_benchmark.csv` | Revision-labelled pre-correction focused benchmark |
 
 ## Limitations
 

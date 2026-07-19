@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from features import ENHANCED_FEATURES, TRAIN_START
+from features import DATA_COMMIT, DATA_SHA256, ENHANCED_FEATURES, TRAIN_START
 from models import (
     CLASS_NAMES, apply_temperature, blend_probabilities, fit_blend_weights,
     fit_lightgbm, fit_tabpfn, fit_temperature, multiclass_log_loss,
@@ -99,6 +99,9 @@ def evaluate(frame: pd.DataFrame, model_version: str, thinking: str, output_dir:
     meta_train = oof[oof["date"] < META_SPLIT]
     meta_eval  = oof[oof["date"] >= META_SPLIT]
     nested_eval_loss = None
+    nested_weights = None
+    nested_temp = None
+    tabpfn_alone_eval_loss = None
     if len(meta_train) and len(meta_eval):
         mt_probs = [meta_train[[f"{n}_{l}" for l in CLASS_NAMES]].to_numpy() for n in model_names]
         nested_weights = fit_blend_weights(meta_train.outcome.to_numpy(), mt_probs)
@@ -107,6 +110,7 @@ def evaluate(frame: pd.DataFrame, model_version: str, thinking: str, output_dir:
         me_probs = [meta_eval[[f"{n}_{l}" for l in CLASS_NAMES]].to_numpy() for n in model_names]
         nested_blend_me = apply_temperature(blend_probabilities(me_probs, nested_weights), nested_temp)
         nested_eval_loss = multiclass_log_loss(meta_eval.outcome.to_numpy(), nested_blend_me)
+        tabpfn_alone_eval_loss = multiclass_log_loss(meta_eval.outcome.to_numpy(), me_probs[0])
 
     # ── Production weights: fit on all OOF for best estimates ─────────────────
     model_probs = [oof[[f"{name}_{label}" for label in CLASS_NAMES]].to_numpy() for name in model_names]
@@ -124,12 +128,26 @@ def evaluate(frame: pd.DataFrame, model_version: str, thinking: str, output_dir:
         competition[f"ensemble_{label}"] = competition_blend[:, j]
     summary = {
         "model_version": model_version, "thinking": thinking,
+        "market_weight": 0.85,
         "weights": dict(zip(model_names, weights.tolist())),
         "temperature": temperature,
         "oof_log_loss": raw_loss,
         "calibrated_oof_log_loss": calibrated_loss,
         "nested_eval_log_loss": nested_eval_loss,
         "nested_meta_split": str(META_SPLIT.date()),
+        "nested_meta_train_matches": len(meta_train),
+        "nested_meta_eval_matches": len(meta_eval),
+        "nested_meta_train_weights": dict(zip(model_names, nested_weights.tolist())) if nested_weights is not None else None,
+        "nested_meta_train_temperature": nested_temp,
+        "tabpfn_alone_eval_log_loss": tabpfn_alone_eval_loss,
+        "blend_benefit_over_tabpfn_honest": (
+            tabpfn_alone_eval_loss - nested_eval_loss
+            if tabpfn_alone_eval_loss is not None else None
+        ),
+        "results_csv_rows": len(frame),
+        "results_csv_last_date": str(frame.date.max().date()),
+        "results_csv_sha256": DATA_SHA256,
+        "results_source_commit": DATA_COMMIT,
         "competition_matches": len(competition),
         "competition_log_loss": multiclass_log_loss(
             competition.outcome, competition[[f"ensemble_{x}" for x in CLASS_NAMES]].to_numpy()

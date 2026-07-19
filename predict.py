@@ -29,18 +29,23 @@ def parse_args():
     parser.add_argument("--thinking", choices=("off", "medium", "high"), default="off")
     parser.add_argument("--evaluate", action="store_true", help="Run rolling-origin evaluation before fitting")
     parser.add_argument("--refresh", action="store_true", help="Refresh results.csv from its public source")
+    parser.add_argument("--fixtures", help="CSV template containing date, home_team, and away_team")
+    parser.add_argument("--as-of", help="Training cutoff (YYYY-MM-DD); defaults to earliest requested fixture")
     parser.add_argument("--output", help="Output CSV path; defaults to predictions_YYYYMMDD.csv")
     return parser.parse_args()
 
 
 def load_config(path: Path = Path("artifacts/ensemble_config.json")):
     if not path.exists():
-        return DEFAULT_WEIGHTS, DEFAULT_TEMPERATURE
+        return DEFAULT_WEIGHTS, DEFAULT_TEMPERATURE, DEFAULT_MARKET_WEIGHT
     config = json.loads(path.read_text(encoding="utf-8"))
     weights = config.get("weights", DEFAULT_WEIGHTS)
     if set(weights) != set(DEFAULT_WEIGHTS) or not np.isclose(sum(weights.values()), 1):
         raise ValueError(f"Invalid ensemble weights in {path}")
-    return weights, float(config.get("temperature", DEFAULT_TEMPERATURE))
+    market_weight = float(config.get("market_weight", DEFAULT_MARKET_WEIGHT))
+    if not 0 <= market_weight <= 1:
+        raise ValueError(f"Invalid market weight in {path}")
+    return weights, float(config.get("temperature", DEFAULT_TEMPERATURE)), market_weight
 
 
 def market_consensus(path: Path, fixture: pd.Series) -> np.ndarray | None:
@@ -54,7 +59,16 @@ def market_consensus(path: Path, fixture: pd.Series) -> np.ndarray | None:
     ]
     if selected.empty:
         return None
-    raw = 1 / selected[["home_decimal_odds", "draw_decimal_odds", "away_decimal_odds"]].to_numpy(dtype=float)
+    retrieved = pd.to_datetime(selected["retrieved_at_utc"], utc=True, errors="raise")
+    kickoff_boundary = pd.Timestamp(fixture.date, tz="UTC")
+    if not (retrieved < kickoff_boundary).all():
+        raise ValueError(f"Market snapshot for {fixture.home_team} vs {fixture.away_team} is not pre-match")
+    if selected.source.nunique() != len(selected):
+        raise ValueError("Market snapshot contains duplicate sources")
+    odds_values = selected[["home_decimal_odds", "draw_decimal_odds", "away_decimal_odds"]].to_numpy(dtype=float)
+    if not np.isfinite(odds_values).all() or not (odds_values > 1).all():
+        raise ValueError("Decimal market odds must be finite and greater than one")
+    raw = 1 / odds_values
     source_probs = normalize_probabilities(raw)
     return normalize_probabilities(np.median(source_probs, axis=0, keepdims=True))[0]
 
@@ -70,6 +84,25 @@ def validate_submission(output: pd.DataFrame):
         raise ValueError("Probability rows must sum to one")
 
 
+def select_fixtures(features: pd.DataFrame, template_path: str | Path | None) -> pd.DataFrame:
+    """Select explicit fixtures without consulting the wall clock."""
+    if template_path:
+        requested = pd.read_csv(template_path, usecols=["date", "home_team", "away_team"])
+        requested["date"] = pd.to_datetime(requested["date"])
+        future = requested.merge(
+            features, on=["date", "home_team", "away_team"], how="left", validate="one_to_many"
+        )
+        keys = ["date", "home_team", "away_team"]
+        if future.duplicated(keys).any():
+            raise ValueError("A requested fixture is duplicated in the pinned dataset")
+        if future["home_score"].notna().any():
+            raise ValueError("A requested fixture already has a recorded result in the pinned dataset")
+        if future[ENHANCED_FEATURES].isna().any().any():
+            raise ValueError("Requested fixture is absent from the pinned dataset or has incomplete features")
+        return future
+    return features[features.home_score.isna()].sort_values("date")
+
+
 def main():
     args = parse_args()
     if args.thinking != "off" and args.model_version != "v3":
@@ -82,11 +115,15 @@ def main():
         summary = evaluate(features, args.model_version, args.thinking)
         print(json.dumps(summary, indent=2))
 
-    today = pd.Timestamp.now().normalize()
-    played = features[features.outcome.notna() & (features.date >= TRAIN_START)].tail(MAX_TRAIN)
-    future = features[features.home_score.isna() & (features.date > today)].sort_values("date")
+    future = select_fixtures(features, args.fixtures)
     if future.empty:
-        raise SystemExit("No future fixtures with missing scores were found")
+        raise SystemExit("No requested fixtures with missing scores were found")
+    cutoff = pd.Timestamp(args.as_of) if args.as_of else future.date.min()
+    if cutoff > future.date.min():
+        raise ValueError("--as-of cannot be later than the earliest requested fixture")
+    played = features[
+        features.outcome.notna() & (features.date >= TRAIN_START) & (features.date < cutoff)
+    ].tail(MAX_TRAIN)
 
     X_train, X_future = played[ENHANCED_FEATURES], future[ENHANCED_FEATURES]
     tabpfn = fit_tabpfn(X_train, played.outcome.to_numpy(), args.model_version, args.thinking)
@@ -96,7 +133,7 @@ def main():
         predict_lightgbm(lightgbm, X_future),
         poisson_probabilities(future),
     ]
-    weights, temperature = load_config()
+    weights, temperature, market_weight = load_config()
     model_probs = blend_probabilities(components, [weights[name] for name in ("tabpfn", "lightgbm", "poisson")])
     model_probs = apply_temperature(model_probs, temperature)
 
@@ -106,7 +143,7 @@ def main():
         market = market_consensus(market_path, fixture)
         if market is not None:
             final_probs[i] = normalize_probabilities(
-                ((1 - DEFAULT_MARKET_WEIGHT) * model_probs[i] + DEFAULT_MARKET_WEIGHT * market).reshape(1, -1)
+                ((1 - market_weight) * model_probs[i] + market_weight * market).reshape(1, -1)
             )[0]
 
     output = future[["date", "home_team", "away_team"]].copy()

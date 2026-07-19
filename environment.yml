@@ -1,0 +1,9 @@
+name: football_forecast
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11.15
+  - llvm-openmp=22.1.8
+  - pip
+  - pip:
+      - -r requirements-lock.txt

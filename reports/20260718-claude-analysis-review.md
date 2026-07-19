@@ -1,5 +1,11 @@
 # Review of Claude's LightGBM Analysis and Recommended Next Steps
 
+> **Historical review — recommendations implemented afterward.** Current
+> post-compliance metrics and the canonical Final row are recorded in
+> `20260718-enhanced-tabpfn-ensemble.md` and
+> `20260718-submission-compliance-implementation.md`.
+
+
 **Reviewed:** 2026-07-18  
 **Primary reference:** `20260718-lgbm-tabpfn-analysis.md`  
 **Post-fix reference:** `20260718-enhanced-tabpfn-ensemble.md`

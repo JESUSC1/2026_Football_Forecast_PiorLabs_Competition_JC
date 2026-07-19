@@ -1,30 +1,31 @@
 {
   "model_version": "v3",
   "thinking": "off",
+  "market_weight": 0.85,
   "weights": {
-    "tabpfn": 0.887096621636292,
-    "lightgbm": 0.06433829958248033,
-    "poisson": 0.04856507878122778
+    "tabpfn": 0.8489460285458631,
+    "lightgbm": 0.10772923971543513,
+    "poisson": 0.043324731738701765
   },
-  "temperature": 1.0372414255764482,
-  "oof_log_loss": 0.8569273713191325,
-  "calibrated_oof_log_loss": 0.8567044054273774,
-  "nested_eval_log_loss": 0.8331,
+  "temperature": 1.0374973677581067,
+  "oof_log_loss": 0.8569426770046755,
+  "calibrated_oof_log_loss": 0.8567172527528332,
+  "nested_eval_log_loss": 0.8331458825212292,
   "nested_meta_split": "2025-07-01",
   "nested_meta_train_matches": 1638,
   "nested_meta_eval_matches": 993,
   "nested_meta_train_weights": {
-    "tabpfn": 0.7283,
-    "lightgbm": 0.2330,
-    "poisson": 0.0387
+    "tabpfn": 0.7429964944484521,
+    "lightgbm": 0.22036517252916318,
+    "poisson": 0.03663833302238475
   },
-  "nested_meta_train_temperature": 1.0794,
-  "tabpfn_alone_eval_log_loss": 0.8301,
-  "blend_benefit_over_tabpfn_honest": -0.003,
-  "competition_matches": 36,
-  "competition_log_loss": 0.826561287326594,
+  "nested_meta_train_temperature": 1.0812335519487621,
+  "tabpfn_alone_eval_log_loss": 0.8311468623164983,
+  "blend_benefit_over_tabpfn_honest": -0.0019990202047309724,
   "results_csv_rows": 49520,
   "results_csv_last_date": "2026-07-19",
-  "results_csv_sha256_prefix": "7f2a1026c1e78d82",
-  "notes": "nested_eval_log_loss is unbiased: weights fitted on 2024-01 to 2025-06, scored on 2025-07 to 2026-06. blend_benefit_over_tabpfn_honest is negative, meaning TabPFN alone outperforms the ensemble on the held-out period. The all-OOF weights are used for production because they use more data; use nested metrics for honest generalization estimates. results_csv_sha256_prefix is the first 16 hex chars of the SHA-256 of results.csv used to generate these weights and the Final prediction."
+  "results_csv_sha256": "7f2a1026c1e78d825b58deba2555d81331b0a80752c57e8e0a3332d1350e5d4c",
+  "results_source_commit": "80f408d2c93ba4f9e06a2c7cdc5effb05fea9680",
+  "competition_matches": 36,
+  "competition_log_loss": 0.8349540200066634
 }
